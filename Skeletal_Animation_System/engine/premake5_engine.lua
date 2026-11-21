@@ -42,5 +42,8 @@ project "skeletal_animation_engine"
         "../assets/shaders/**.vs",
         "../assets/shaders/**.fs",
         "../assets/shaders/**.vert",
-        "../assets/shaders/**.frag"
+        "../assets/shaders/**.frag",
+        "../assets/models/**.glb",
+        "../assets/models/**.gltf"
+
     }

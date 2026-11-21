@@ -9,8 +9,7 @@ namespace ska {
 				~Window();
 				Window(const Window&) = delete;
 				Window& operator=(const Window&) = delete;
-				/*void create();
-				void destroy();*/
+
 				bool isClosed() const;
 				void swap();
 				void pollEvents();

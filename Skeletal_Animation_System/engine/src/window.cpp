@@ -58,7 +58,7 @@ void ska::Window::swap()
 void ska::Window::pollEvents()
 {
 	int w, h;
-	glfwGetWindowSize(glfw_window_, &w, &h);
+	glfwGetFramebufferSize(glfw_window_, &w, &h);
 
 	width_ = static_cast<u16>(w);
 	height_ = static_cast<u16>(h);
