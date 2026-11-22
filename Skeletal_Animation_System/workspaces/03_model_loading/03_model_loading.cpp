@@ -7,6 +7,7 @@
 #include <SKA/loaders/model_loader.hpp>
 #include <SKA/renderer/shader_program.hpp>
 #include <SKA/loaders/model_loader.hpp>
+#include <SKA/animation/skinning.hpp>
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
@@ -87,6 +88,24 @@ int main()
 
 	ska::Model modelGLB;
 	modelGLB.loadModel("assets/models/CesiumMan.glb");
+
+	ska::Mesh& mesh = *modelGLB.getMeshes()[0];
+	const std::vector<ska::Vertex> vertices = mesh.getVertices();
+
+	ska::CpuSkinner cpuSkinner(mesh);
+
+	const ska::Skeleton& skeleton = modelGLB.getSkeleton();
+	const auto globals = skeleton.computeGlobals(skeleton.bindLocals());
+	const auto skinMatrices = skeleton.computeSkinMatrices(globals);
+
+	cpuSkinner.skin(skinMatrices, mesh);
+
+	const std::vector<ska::Vertex>& skinnedVertices = mesh.getVertices();
+	float maxError = 0.0f;
+	for (size_t i = 0; i < vertices.size(); ++i) {
+		maxError = std::max(maxError, glm::length(skinnedVertices[i].position - vertices[i].position));
+	}
+	printf("Max diferencia de posicion en reposo: %g\n", maxError);
 
 	glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)window.getWidth() / (float)window.getHeight(), 0.1f, 100.0f);

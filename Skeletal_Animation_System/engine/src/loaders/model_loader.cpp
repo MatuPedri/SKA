@@ -33,7 +33,7 @@ static void addInfluence(ska::Vertex& v, int boneId, float weight) {
 	}
 }
 
-static std::unique_ptr<ska::Mesh> processMesh(const aiMesh* mesh, const ska::Skeleton skeleton)
+static std::unique_ptr<ska::Mesh> processMesh(const aiMesh* mesh, const ska::Skeleton& skeleton)
 {
 	std::vector<ska::Vertex> vertices;
 	std::vector<u32> indices;
@@ -51,8 +51,8 @@ static std::unique_ptr<ska::Mesh> processMesh(const aiMesh* mesh, const ska::Ske
 	for (unsigned int b = 0; b < mesh->mNumBones; ++b)
 	{
 		const aiBone* bone = mesh->mBones[b];
-		int boneId = skeleton.boneMap.at(bone->mName.C_Str());
-
+		int boneId = skeleton.findBone(bone->mName.C_Str());
+		if(boneId < 0) continue;   // hueso desconocido ignoramos 
 		for (unsigned int w = 0; w < bone->mNumWeights; ++w)
 		{
 			const aiVertexWeight& vw = bone->mWeights[w];
@@ -115,12 +115,11 @@ static glm::mat4 toGlm(const aiMatrix4x4& mat)
 
 static void buildSkeleton(const aiNode* node, const aiScene* scene, ska::Skeleton& skeleton, int parentIndex = -1)
 {
-	ska::BoneInfo boneInfo;
-	boneInfo.name = node->mName.C_Str();
-	boneInfo.parent = parentIndex;
-	boneInfo.localBind = toGlm(node->mTransformation);
-	boneInfo.inversedBind = glm::mat4(1.0f);
-	boneInfo.isBone = false;
+	const std::string name = node->mName.C_Str();
+	const glm::mat4 localBind = toGlm(node->mTransformation);
+	glm::mat4 inversedBind(1.0f);
+	bool isBone = false;
+
 	for (unsigned int i = 0; i < scene->mNumMeshes; ++i)
 	{
 		const aiMesh* mesh = scene->mMeshes[i];
@@ -129,17 +128,18 @@ static void buildSkeleton(const aiNode* node, const aiScene* scene, ska::Skeleto
 			const aiBone* bone = mesh->mBones[b];
 			if (bone->mName == node->mName)
 			{
-				boneInfo.isBone = true;
-				boneInfo.inversedBind = toGlm(bone->mOffsetMatrix);
+				isBone = true;
+				inversedBind = toGlm(bone->mOffsetMatrix);
 				break;
 			}
 		}
 	}
 
-	int currentIndex = static_cast<int>(skeleton.bones.size());
+	int currentIndex = skeleton.addBone(name, parentIndex, localBind, inversedBind, isBone);
 	//printf("Index: %d | Bone: %s | Parent: %d | IsBone: %d\n", currentIndex, boneInfo.name.c_str(), boneInfo.parent, boneInfo.isBone);
-	skeleton.bones.push_back(boneInfo);
-	skeleton.boneMap[node->mName.C_Str()] = currentIndex;
+	if(node->mNumMeshes > 0) {
+		skeleton.setMeshNode(currentIndex);
+	}
 	for (unsigned int i = 0; i < node->mNumChildren; ++i)
 	{
 		buildSkeleton(node->mChildren[i], scene, skeleton, currentIndex);
@@ -148,30 +148,21 @@ static void buildSkeleton(const aiNode* node, const aiScene* scene, ska::Skeleto
 
 static void validateSkeleton(const ska::Skeleton& skeleton) {
 	// matriz de skinning en reposo inverse(globalMesh) * global[i] * inversedBind[i] = I
-	std::vector<glm::mat4> global(skeleton.bones.size());
-	const int meshInv = skeleton.boneMap.at("Cesium_Man"); 
-	for (size_t i = 0; i < skeleton.bones.size(); i++) {
-		const ska::BoneInfo& b = skeleton.bones[i];
+	const auto global =	skeleton.computeGlobals(skeleton.bindLocals());
+	const auto skin = skeleton.computeSkinMatrices(global); 
+	
+	for(size_t i = 0; i < skeleton.getBoneCount(); ++i) {
+		const auto& b = skeleton.getBone(i);
+		if (!b.isBone) continue;
 
-		// localBind solo dice dónde está el hueso respecto a su padre. Para saber dónde está respecto al modelo hay que encadenar los padres.
-		global[i] = (b.parent < 0) ? b.localBind : global[b.parent] * b.localBind;
-	}
-		
-	for(size_t i = 0; i < skeleton.bones.size(); i++){
-		const ska::BoneInfo& b = skeleton.bones[i];
-		if (!b.isBone) continue;		// solo comprobamos huesos reales
-
-		//global lleva el hueso desde su espacio local al modelo, e inversedBind hace el camino contrario. En reposo, el producto tiene que ser la identidad. 
-		//El doble bucle mide cuánto se aleja r de la identidad.err es la mayor diferencia en cualquier celda.
-		glm::mat4 r = glm::inverse(global[meshInv]) * global[i] * b.inversedBind;
 		float err = 0.0f;
-		for (int c = 0; c < 4; c++) {
-			for (int row = 0; row < 4; row++) {
+		for(int c = 0; c < 4; ++c) {
+			for(int row = 0; row < 4; ++row) {
 				float expected = (c == row) ? 1.0f : 0.0f;
-				err = std::max(err, std::abs(r[c][row] - expected));
+				err = std::max(err, std::abs(skin[i][c][row] - expected));
 			}
 		}
-		printf("%s: error = %g\n", b.name.c_str(), err);
+		printf("Bone %zu: %s | Max error: %.6f\n", i, b.name.c_str(), err);
 	}
 }
 
@@ -189,7 +180,7 @@ void ska::Model::loadModel(const std::string& path)
 	//modelInfo(scene);
 	
 	buildSkeleton(scene->mRootNode, scene, skeleton_);
-	//validateSkeleton(skeleton_);
+	validateSkeleton(skeleton_);
 
 	meshes_.reserve(scene->mNumMeshes);
 	for(int i = 0; i < scene->mNumMeshes; ++i)

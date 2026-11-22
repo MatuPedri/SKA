@@ -1,6 +1,8 @@
 #version 450 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNorm;
+layout (location = 2) in ivec4 aBoneIds;
+layout (location = 3) in vec4  aBoneWeights;
 
 uniform mat4 model;
 uniform mat4 view;
