@@ -2,7 +2,7 @@
 #include "../common.hpp"
 #include "../renderer/mesh.hpp"
 #include "SKA/animation/skeleton.hpp"
-
+#include "SKA/animation/animation_clip.hpp"
 
 namespace ska
 {
@@ -22,8 +22,10 @@ namespace ska
 			}
 
 			Skeleton& getSkeleton() { return skeleton_; }
+			const std::vector<AnimationClip>& getAnimations() const { return animations_; }
 		private:
 			Skeleton skeleton_;
 			std::vector<std::unique_ptr<Mesh>> meshes_;
+			std::vector<AnimationClip> animations_;
 	};
 }

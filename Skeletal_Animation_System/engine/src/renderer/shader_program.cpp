@@ -51,3 +51,11 @@ void ska::ShaderProgram::setMat4(const std::string& name, const glm::mat4& value
 {
 	glUniformMatrix4fv(glGetUniformLocation(id_, name.c_str()), 1, GL_FALSE, &value[0][0]);
 }
+
+void ska::ShaderProgram::setMat4Array(const std::string& name, const std::vector<glm::mat4>& value) const
+{
+	if (value.empty()) return;
+
+	glUniformMatrix4fv(glGetUniformLocation(id_, name.c_str()), static_cast<GLsizei>(value.size()), GL_FALSE, glm::value_ptr(value[0]));
+}
+

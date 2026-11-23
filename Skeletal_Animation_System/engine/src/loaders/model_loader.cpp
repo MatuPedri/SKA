@@ -1,6 +1,5 @@
 #include "SKA/loaders/model_loader.hpp"
 #include "SKA/renderer/vertex.hpp"
-#include "SKA/renderer/mesh.hpp"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -21,6 +20,51 @@ static void validateWeights(const std::vector<ska::Vertex>& vertices)
 	}
 	printf("Vertices: %zu | sin huesos: %d | suma != 1: %d | max influencias: %d\n",
 		vertices.size(), noBones, badSum, maxInfl);
+}
+
+static ska::AnimationClip loadAnimation(const aiAnimation* anim, const ska::Skeleton& skeleton)
+{
+	ska::AnimationClip clip(anim->mName.C_Str(), static_cast<float>(anim->mDuration), anim->mTicksPerSecond > 0.0 ? static_cast<float>(anim->mTicksPerSecond) : 25.0f);
+
+	for (unsigned int c = 0; c < anim->mNumChannels; ++c)
+	{
+		const aiNodeAnim* channel = anim->mChannels[c];
+		int boneIndex = skeleton.findBone(channel->mNodeName.C_Str());
+		if (boneIndex < 0) continue;
+
+		ska::BoneTrack track;
+		track.boneIndex = boneIndex;
+
+		for (unsigned int p = 0; p < channel->mNumPositionKeys; ++p)
+		{
+			const aiVectorKey& pk = channel->mPositionKeys[p];
+			ska::KeyVec3 key;
+			key.time = static_cast<float>(pk.mTime);
+			key.value = glm::vec3(pk.mValue.x, pk.mValue.y, pk.mValue.z);
+			track.positionKeys.push_back(key);
+		}
+
+		for (unsigned int r = 0; r < channel->mNumRotationKeys; ++r)
+		{
+			const aiQuatKey& rk = channel->mRotationKeys[r];
+			ska::KeyQuat key;
+			key.time = static_cast<float>(rk.mTime);
+			key.value = glm::quat(rk.mValue.w, rk.mValue.x, rk.mValue.y, rk.mValue.z);
+			track.rotationKeys.push_back(key);
+		}
+
+		for (unsigned int s = 0; s < channel->mNumScalingKeys; ++s)
+		{
+			const aiVectorKey& sk = channel->mScalingKeys[s];
+			ska::KeyVec3 key;
+			key.time = static_cast<float>(sk.mTime);
+			key.value = glm::vec3(sk.mValue.x, sk.mValue.y, sk.mValue.z);
+			track.scaleKeys.push_back(key);
+		}
+
+		clip.addTrack(std::move(track));
+	}
+	return clip;
 }
 
 static void addInfluence(ska::Vertex& v, int boneId, float weight) {
@@ -180,7 +224,10 @@ void ska::Model::loadModel(const std::string& path)
 	//modelInfo(scene);
 	
 	buildSkeleton(scene->mRootNode, scene, skeleton_);
-	validateSkeleton(skeleton_);
+	for (unsigned int a = 0; a < scene->mNumAnimations; ++a){
+		animations_.push_back(loadAnimation(scene->mAnimations[a], skeleton_));
+	}
+	//validateSkeleton(skeleton_);
 
 	meshes_.reserve(scene->mNumMeshes);
 	for(int i = 0; i < scene->mNumMeshes; ++i)

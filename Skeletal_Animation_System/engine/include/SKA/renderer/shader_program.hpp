@@ -14,6 +14,7 @@ namespace ska {
 			void use() const;
 			u32 getId() const { return id_; }
 			void setMat4(const std::string& name, const glm::mat4& value) const;
+			void setMat4Array(const std::string& name, const std::vector<glm::mat4>& value) const;
 		protected:
 			u32 id_ = 0;
 	};
